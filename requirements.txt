@@ -1,0 +1,5 @@
+requests>=2.25.1
+mcdreforged
+threading
+json
+os

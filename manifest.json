@@ -1,0 +1,15 @@
+{
+    "id": "bilibili_fans_display",
+    "version": "3.0.0",
+    "name": "BilibiliFansDisplay",
+    "description": "在游戏内通过假人显示B站UP主粉丝数，支持多MID/多显示板/API调用",
+    "author": "Zxd",
+    "link": "https://github.com/wunanc/BilibiliFansDisplay-MCDR",
+    "dependencies": {
+        "mcdreforged": ">=2.10.0"
+    },
+    "entrypoint": "bilibili_fans_display.py",
+    "archive_name": "BilibiliFansDisplay-{version}.mcdr",
+    "tags": ["bilibili", "follower", "display", "utility"],
+    "requirements": ["requests>=2.25.1"]
+}
