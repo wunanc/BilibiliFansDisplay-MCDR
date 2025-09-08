@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Bilibili Follower Display Plugin for MCDR
-Version: 3.2
+Version: 3.3.1
 Author: 通义千问/小豆(DeepSeek/呜楠二改)
 功能：通过假人显示B站UP主粉丝数，支持多MID/多显示板/API调用
 配置文件：bfanconfig.json
@@ -43,7 +43,7 @@ from mcdreforged.api.all import *
 # 插件元数据
 PLUGIN_METADATA = {
     'id': 'follower_display',
-    'version': '3.2',
+    'version': '3.3.1',
     'name': 'Bilibili Follower Display',
     'description': '在游戏内通过假人显示B站粉丝数，支持多MID/多显示板/API调用',
     'author': '通义千问/小豆(DeepSeek/呜楠二改)'
@@ -59,7 +59,7 @@ config = {
             'name': 'main',    # 显示板名称
             'mid': '114514',   # 该显示板对应的B站MID
             'open_api': True,  # 是否开放API供其他插件调用
-            'digit_look_at': { # 数字朝向坐标
+            'digit_look_at': { # 数字朝向坐标 这些是告示牌的位置
                 '0': '-2464 197 -947',
                 '1': '-2463 197 -947',
                 '2': '-2462 197 -946',
@@ -71,7 +71,7 @@ config = {
                 '8': '-2466 197 -944',
                 '9': '-2466 197 -945'
             },
-            'reset_pos': '-2466 196 -947',  # 复位位置
+            'reset_pos': '-2466 197 -947',  # 复位位置
             'spawn_pos': '-2464 198 -945',  # 假人生成位置
             'delay_between_commands': 1.0   # 每个动作间隔（秒）
         }
@@ -87,6 +87,7 @@ server_inst = None  # 保存 MCDR server 实例
 plugin_instances = {}  # 存储插件实例供API调用
 is_updating = False  # 标记是否正在更新
 current_update_index = 0  # 当前更新的显示板索引
+scheduler_running = False  # 标记定时任务是否正在运行
 
 # ===== 工具函数 =====
 
@@ -271,7 +272,7 @@ def update_next_display():
             fans, 
             display_name, 
             only_changed=(old_fans is not None),
-            callback=update_next_display
+            callback=lambda: update_next_display_callback(display_name, fans, old_fans)
         )
     else:
         server_inst.say(f"❌ 显示板 '{display_name}' 更新失败")
@@ -279,14 +280,28 @@ def update_next_display():
         current_update_index += 1
         update_next_display()
 
+def update_next_display_callback(display_name, new_fans, old_fans):
+    """更新完成后的回调函数"""
+    global current_update_index
+    # 保存新的粉丝数
+    save_cache(new_fans, display_name)
+    # 更新下一个显示板
+    current_update_index += 1
+    update_next_display()
+
 def start_scheduled_update():
     """启动定时更新任务"""
-    global update_timer, is_updating
+    global update_timer, is_updating, scheduler_running
     if update_timer is not None:
         return  # 已在运行
+    
+    scheduler_running = True
 
     def task():
-        global update_timer, is_updating, current_update_index
+        global update_timer, is_updating, current_update_index, scheduler_running
+        if not scheduler_running:
+            return  # 如果定时任务已停止，不再执行
+            
         if is_updating:
             log_info("⏱️ 跳过本次更新（上次更新仍在进行中）")
         else:
@@ -295,8 +310,10 @@ def start_scheduled_update():
             log_info("⏱️ 开始顺序更新所有显示板")
             update_next_display()
         
-        update_timer = threading.Timer(config['update_interval'], task)
-        update_timer.start()
+        # 只有在定时任务仍在运行时才设置下一个定时器
+        if scheduler_running:
+            update_timer = threading.Timer(config['update_interval'], task)
+            update_timer.start()
 
     update_timer = threading.Timer(config['update_interval'], task)
     update_timer.start()
@@ -304,13 +321,14 @@ def start_scheduled_update():
 
 def stop_scheduled_update():
     """停止定时更新"""
-    global update_timer, is_updating, current_update_index
+    global update_timer, is_updating, current_update_index, scheduler_running
+    scheduler_running = False
     if update_timer is not None:
         update_timer.cancel()
         update_timer = None
-        is_updating = False
-        current_update_index = 0
-        server_inst.say("🛑 自动更新已停止")
+    is_updating = False
+    current_update_index = 0
+    server_inst.say("🛑 自动更新已停止")
 
 def get_task_status():
     """获取任务状态"""
@@ -319,6 +337,44 @@ def get_task_status():
         status += " (正在更新)"
     return status
 
+# ===== 重载功能 =====
+
+def reload_config():
+    """重新加载配置文件"""
+    global config
+    
+    try:
+        config_path = os.path.join(server_inst.get_data_folder(), 'bfanconfig.json')
+        if os.path.isfile(config_path):
+            with open(config_path, 'r', encoding='utf-8') as f:
+                user_config = json.load(f)
+                
+                # 保留当前运行状态
+                was_running = (update_timer is not None)
+                
+                # 停止当前定时任务
+                if was_running:
+                    stop_scheduled_update()
+                
+                # 更新配置
+                config.update(user_config)
+                
+                # 保存配置（确保完整）
+                server_inst.save_config_simple(config, 'bfanconfig.json')
+                
+                # 如果之前定时任务在运行，重新启动
+                if was_running:
+                    start_scheduled_update()
+                
+                server_inst.say("✅ 配置已重载")
+                return True
+        else:
+            server_inst.say("❌ 配置文件不存在")
+            return False
+    except Exception as e:
+        server_inst.say(f"❌ 重载配置失败: {str(e)}")
+        return False
+    
 # ===== 命令处理 =====
 
 def on_info(server, info):
@@ -467,6 +523,13 @@ def on_info(server, info):
             display_list.append(f"{display['name']} (MID: {display['mid']}, API: {api_status})")
         server.say(f"📋 可用显示板:\n" + "\n".join(display_list))
 
+    # 9. 重载配置
+    elif args == ['!!fan', 'reload']:
+        if reload_config():
+            server.say("✅ 插件配置已重载")
+        else:
+            server.say("❌ 配置重载失败")
+
     # 9. 定时任务控制
     elif args == ['!!fan', 'interval']:
         if get_task_status() == "运行中":
@@ -518,6 +581,7 @@ def on_info(server, info):
 §a!!fan api show <显示板> <数字> §f- 在指定显示板显示数字
 §a!!fan display [name] §f- 首次显示到指定显示板
 §a!!fan update [name] §f- 智能更新指定显示板
+§a!!fan reload §f- 重载配置文件
 §a!!fan displays §f- 列出所有显示板
 §a!!fan interval §f- 启/停自动更新
 §a!!fan interval status §f- 查看状态
@@ -525,6 +589,7 @@ def on_info(server, info):
 §a!!fan log toggle §f- 切换日志
 §7========================§r
         '''.strip())
+        server.reply(info, "§7插件版本: §a" + PLUGIN_METADATA['version'] + " §7作者: §a" + PLUGIN_METADATA['author'])
 
 # ===== 插件生命周期 =====
 
@@ -600,10 +665,11 @@ def on_load(server, old_module):
 
 def on_unload(server):
     """插件卸载时停止任务"""
-    global plugin_instances, is_updating, current_update_index
+    global plugin_instances, is_updating, current_update_index, scheduler_running
     stop_scheduled_update()
     is_updating = False
     current_update_index = 0
+    scheduler_running = False
     if PLUGIN_METADATA['id'] in plugin_instances:
         del plugin_instances[PLUGIN_METADATA['id']]
     server.logger.info("[Bilibili] 插件已卸载")

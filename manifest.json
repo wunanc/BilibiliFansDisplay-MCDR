@@ -1,6 +1,6 @@
 {
     "id": "bilibili_fans_display",
-    "version": "3.0.0",
+    "version": "3.3.1",
     "name": "BilibiliFansDisplay",
     "description": "在游戏内通过假人显示B站UP主粉丝数，支持多MID/多显示板/API调用",
     "author": "Zxd",
