@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Bilibili Follower Display Plugin for MCDR
-Version: 3.3.1
+Version: 3.3.2
 Author: 通义千问/小豆(DeepSeek/呜楠二改)
 功能：通过假人显示B站UP主粉丝数，支持多MID/多显示板/API调用
 配置文件：bfanconfig.json
@@ -346,33 +346,61 @@ def reload_config():
     try:
         config_path = os.path.join(server_inst.get_data_folder(), 'bfanconfig.json')
         if os.path.isfile(config_path):
-            with open(config_path, 'r', encoding='utf-8') as f:
-                user_config = json.load(f)
+            # 先备份当前配置，以防重载失败
+            old_config = config.copy()
+            
+            # 停止当前定时任务
+            was_running = (update_timer is not None)
+            if was_running:
+                stop_scheduled_update()
+            
+            try:
+                # 读取新配置
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    user_config = json.load(f)
                 
-                # 保留当前运行状态
-                was_running = (update_timer is not None)
-                
-                # 停止当前定时任务
-                if was_running:
-                    stop_scheduled_update()
+                # 验证配置格式
+                if 'displays' not in user_config:
+                    raise ValueError("配置文件缺少必要的 displays 字段")
                 
                 # 更新配置
+                config.clear()
                 config.update(user_config)
                 
-                # 保存配置（确保完整）
-                server_inst.save_config_simple(config, 'bfanconfig.json')
+                # 保存配置到临时位置验证
+                temp_path = os.path.join(server_inst.get_data_folder(), 'bfanconfig_temp.json')
+                with open(temp_path, 'w', encoding='utf-8') as f:
+                    json.dump(config, f, indent=2, ensure_ascii=False)
+                
+                # 删除临时文件
+                os.remove(temp_path)
                 
                 # 如果之前定时任务在运行，重新启动
                 if was_running:
                     start_scheduled_update()
                 
                 server_inst.say("✅ 配置已重载")
+                log_info("配置文件重载成功")
                 return True
+                
+            except Exception as e:
+                # 恢复旧配置
+                config.clear()
+                config.update(old_config)
+                
+                # 重新启动定时任务（如果之前在运行）
+                if was_running:
+                    start_scheduled_update()
+                
+                server_inst.say(f"❌ 配置格式错误: {str(e)}")
+                log_info(f"配置重载失败: {str(e)}")
+                return False
         else:
             server_inst.say("❌ 配置文件不存在")
             return False
     except Exception as e:
         server_inst.say(f"❌ 重载配置失败: {str(e)}")
+        log_info(f"重载配置失败: {str(e)}")
         return False
     
 # ===== 命令处理 =====
@@ -528,7 +556,7 @@ def on_info(server, info):
         if reload_config():
             server.say("✅ 插件配置已重载")
         else:
-            server.say("❌ 配置重载失败")
+            server.say("❌ 配置重载失败，已恢复原配置")
 
     # 9. 定时任务控制
     elif args == ['!!fan', 'interval']:
@@ -561,7 +589,7 @@ def on_info(server, info):
                     return
                 config['update_interval'] = interval
                 server.save_config_simple(config, 'bfanconfig.json')
-                server.say(f"⏱️ 更新间隔已设置为 {interval} 秒")
+                server.say(f"🕙更新间隔已设置为 {interval} 秒")
                 # 重启任务
                 if update_timer is not None:
                     stop_scheduled_update()
