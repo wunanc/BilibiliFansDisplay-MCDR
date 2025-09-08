@@ -8,8 +8,6 @@
 
 [原作者视频链接][def]
 
-<iframe src="//player.bilibili.com/player.html?isOutside=true&aid=115112656510102&bvid=BV1vGhZzEEb8&cid=32033539891&p=1" scrolling="no" border="0" frameborder="no" framespacing="0" allowfullscreen="true"></iframe>
-
 ## 预览二改后视频
 
 [预览二改后视频链接][def1]

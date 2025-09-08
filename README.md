@@ -8,10 +8,6 @@
 
 [Original Author's Video Link][def]
 
-<video width="320" height="240" controls>
-<source src="//player.bilibili.com/player.html?isOutside=true&aid=115112656510102&bvid=BV1vGhZzEEb8&cid=32033539891&p=1" type="video/mp4">
-</video>
-
 ## Preview Modified Version Video
 
 [Preview Modified Version Video Link][def1]
