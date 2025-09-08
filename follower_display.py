@@ -598,6 +598,9 @@ def on_load(server, old_module):
     server_inst = server
 
     server.logger.info('[Bilibili] 插件正在加载...')
+    server.logger.info('[Bilibili] 作者: 通义千问/小豆(DeepSeek/呜楠二改) 版本: 3.3.1')
+    server.logger.info('[Bilibili] 插件主页:https://github.com/wunanc/BilibiliFansDisplay-MCDR')
+    server.logger.info('[Bilibili] 如果喜欢此插件，请点个⭐(starred)支持一下！')
 
     # 创建数据目录
     data_folder = server.get_data_folder()
